@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "lcd.h"
+#include "stdlib.h"
 #include "string.h"
 /* USER CODE END Includes */
 
@@ -141,8 +142,76 @@ uint8_t Keypad_Getkey()
 	return 0;
 }
 
-const char keypad_layout[16]= "789+456-123xs0=:";
+const char keypad_layout[2][16]= {"789+456-123xs0=:", "g<>+def-abcxSc=:"};
 
+uint64_t Result(char * string)
+{
+	uint64_t temp_var[10] = {0,0,0,0,0,0,0,0,0,0};
+	uint8_t num = 0;
+	uint8_t tmp[10] = {0,0,0,0,0,0,0,0,0,0};
+	uint8_t num_cnt = 0;
+	uint8_t equaltion[9] = {0,0,0,0,0,0,0,0,0};
+	for(uint8_t i = 0; i < strlen(string); i++){
+		int tempk = string[i]-'0';
+		if (tempk < 10 && tempk >= 0){
+			tmp[num_cnt] = tempk;
+			num_cnt ++;
+		}
+		else {
+			if (string[i] == '+'){
+				equaltion[num] = 1;
+			}
+			else if (string[i] == '-') {
+				equaltion[num] = 2;
+			}
+			else if (string[i] == 'x') {
+				equaltion[num] = 3;
+			}
+			else if (string[i] == ':') {
+				equaltion[num] = 4;
+			}
+			for(uint8_t j = 0; j < num_cnt; j++){
+				uint64_t tempkk = tmp[j];
+				for(uint8_t k =0; k < num_cnt-j-1; k++){
+					tempkk = tempkk*10;
+				}
+				temp_var[num] = temp_var[num] + tempkk;
+				tmp[j] = 0;
+			}
+			num_cnt = 0;
+			num ++;
+		}
+	}
+	for(uint8_t i = 0; i < 10; i++){
+		if (equaltion[i] == 3) {
+			temp_var[i+1] = temp_var[i] * temp_var[i+1];
+			temp_var[i] = 0;
+			if (i>0){
+				equaltion[i] = equaltion[i-1];
+			}
+			else equaltion[i] = 1;
+		}
+		else if (equaltion[i] == 4) {
+			temp_var[i+1] = temp_var[i] / temp_var[i+1];
+			temp_var[i] = 0;
+			if (i>0){
+				equaltion[i] = equaltion[i-1];
+			}
+			else equaltion[i] = 1;
+		}
+	}
+	for(uint8_t i = 0; i < 10; i++){
+		if (equaltion[i] == 1) {
+			temp_var[i+1] = temp_var[i] + temp_var[i+1];
+		}
+		else if (equaltion[i] == 2) {
+			temp_var[i+1] = temp_var[i] - temp_var[i+1];
+		}
+		else if (equaltion[i] == 0) {
+			return temp_var[i];
+		}
+	}
+}
 /* USER CODE END 0 */
 
 /**
@@ -179,39 +248,74 @@ int main(void)
   Lcd_PinType pins[] = {LCD_D4_Pin, LCD_D5_Pin, LCD_D6_Pin, LCD_D7_Pin};
   Lcd_HandleTypeDef lcd;
   lcd = Lcd_create(ports, pins, GPIOA, LCD_RS_Pin, GPIOA, LCD_E_Pin, LCD_4_BIT_MODE);
+
+  Lcd_cursor(&lcd, 0, 0);
+  Lcd_string(&lcd, "BTL ESD NHOM XX");
+  HAL_Delay(1500);
+  Lcd_clear(&lcd);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   uint8_t cursor_cnt = 0;
+  uint8_t cursor_max = 0;
   uint8_t lcd_zero = 0;
+  uint8_t current_layout = 0;
   char s;
   char *lcd_buffer=(char*) malloc(200+1);
+  memset(lcd_buffer,0,strlen(lcd_buffer));
   while (1)
   {
     /* USER CODE END WHILE */
 	  key_current = Keypad_Getkey();
 	  if(key_current != 0 && key_current != key_prev) {
-		  s = keypad_layout[key_current-1];
+		  s = keypad_layout[current_layout][key_current-1];
 
-		  lcd_buffer[cursor_cnt] = s;
+		  if (s == keypad_layout[0][12]) {
+			  current_layout = 1;
+		  }
+		  else if (s == keypad_layout[1][12]) {
+			  current_layout = 0;
+		  }
+		  else if (s == keypad_layout[1][13]) {
+			  Lcd_clear(&lcd);
+			  cursor_cnt = 0;
+			  memset(lcd_buffer,0,strlen(lcd_buffer));
+		  }
+		  else if (s == keypad_layout[0][14]) {
+			  char snum[16];
+			  lcd_buffer[cursor_cnt] = s;
+			  itoa(Result(lcd_buffer), snum, 10);
+			  Lcd_cursor(&lcd, 1, 0);
+			  Lcd_string(&lcd, snum);
+		  }
+		  else if (s == '<') {
+			  cursor_cnt --;
+		  }
+		  else if (s == '>') {
+			  if (cursor_cnt < cursor_max) {
+				  cursor_cnt ++;
+			  }
+		  }
+		  else {
+			  lcd_buffer[cursor_cnt] = s;
 
-		  cursor_cnt ++;
+			  cursor_cnt ++;
+			  cursor_max = cursor_cnt;
+		  }
+
+		  // print lcd
 		  if (cursor_cnt>16){
 			  lcd_zero = cursor_cnt-16;
 		  }
-		  else lcd_zero = 0;
+		  else {
+			  lcd_zero = 0;
+		  }
 		  char subbuff[17];
 		  memcpy( subbuff, &lcd_buffer[lcd_zero], 16 );
 		  subbuff[16] = '\0';
 		  Lcd_cursor(&lcd, 0, 0);
 		  Lcd_string(&lcd, subbuff);
-
-		  if (s == keypad_layout[12]) {
-			  Lcd_clear(&lcd);
-			  cursor_cnt = 0;
-			  memset(lcd_buffer,0,strlen(lcd_buffer));
-		  }
 	  }
 	  key_prev = key_current;
 
