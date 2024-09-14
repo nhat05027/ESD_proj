@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "lcd.h"
+#include "string.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -121,16 +122,27 @@ uint8_t Keypad_Getkey()
 	for (row=0 ; row<8 ; row ++)
 	{
 		selectRow(row);
-		HAL_Delay(1);
+		HAL_Delay(2);
 			if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10) == 0)
 			{
-				return key_code[row][0];
+				HAL_Delay(50);
+				if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10) == 0){
+					return key_code[row][0];
+				}
 			}
 			else if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9) == 0)
-				return key_code[row][1];
+			{
+				HAL_Delay(50);
+				if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9) == 0){
+					return key_code[row][1];
+				}
+			}
 	}
 	return 0;
 }
+
+const char keypad_layout[16]= "789+456-123xs0=:";
+
 /* USER CODE END 0 */
 
 /**
@@ -164,23 +176,44 @@ int main(void)
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
   Lcd_PortType ports[] = { GPIOA, GPIOA, GPIOA, GPIOA };
-  Lcd_PinType pins[] = {GPIO_PIN_2, GPIO_PIN_3, GPIO_PIN_4, GPIO_PIN_5};
+  Lcd_PinType pins[] = {LCD_D4_Pin, LCD_D5_Pin, LCD_D6_Pin, LCD_D7_Pin};
   Lcd_HandleTypeDef lcd;
-  lcd = Lcd_create(ports, pins, GPIOA, GPIO_PIN_0, GPIOA, GPIO_PIN_1, LCD_4_BIT_MODE);
+  lcd = Lcd_create(ports, pins, GPIOA, LCD_RS_Pin, GPIOA, LCD_E_Pin, LCD_4_BIT_MODE);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint8_t cursor_cnt = 0;
+  uint8_t lcd_zero = 0;
+  char s;
+  char *lcd_buffer=(char*) malloc(200+1);
   while (1)
   {
     /* USER CODE END WHILE */
 	  key_current = Keypad_Getkey();
-	  if(key_current != key_prev) {
-		  Lcd_clear(&lcd);
-		  Lcd_cursor(&lcd, 0,0);
-		  Lcd_int(&lcd, key_current);
-		  key_prev = key_current;
+	  if(key_current != 0 && key_current != key_prev) {
+		  s = keypad_layout[key_current-1];
+
+		  lcd_buffer[cursor_cnt] = s;
+
+		  cursor_cnt ++;
+		  if (cursor_cnt>16){
+			  lcd_zero = cursor_cnt-16;
+		  }
+		  else lcd_zero = 0;
+		  char subbuff[17];
+		  memcpy( subbuff, &lcd_buffer[lcd_zero], 16 );
+		  subbuff[16] = '\0';
+		  Lcd_cursor(&lcd, 0, 0);
+		  Lcd_string(&lcd, subbuff);
+
+		  if (s == keypad_layout[12]) {
+			  Lcd_clear(&lcd);
+			  cursor_cnt = 0;
+			  memset(lcd_buffer,0,strlen(lcd_buffer));
+		  }
 	  }
+	  key_prev = key_current;
 
     /* USER CODE BEGIN 3 */
   }
