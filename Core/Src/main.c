@@ -24,6 +24,7 @@
 #include "lcd.h"
 #include "stdlib.h"
 #include "string.h"
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,6 +43,7 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
 
@@ -50,6 +52,7 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -143,12 +146,12 @@ uint8_t Keypad_Getkey()
 }
 
 const char keypad_layout[2][16]= {"789+456-123xs0=:", "g<>+def-abcxSc=:"};
+bool splash = false;
 
-uint64_t Result(char * string)
-{
-	uint64_t temp_var[10] = {0,0,0,0,0,0,0,0,0,0};
+int64_t Result(char * string){
+	int64_t temp_var[10] = {0,0,0,0,0,0,0,0,0,0};
 	uint8_t num = 0;
-	uint8_t tmp[10] = {0,0,0,0,0,0,0,0,0,0};
+	uint8_t tmp[19] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	uint8_t num_cnt = 0;
 	uint8_t equaltion[9] = {0,0,0,0,0,0,0,0,0};
 	for(uint8_t i = 0; i < strlen(string); i++){
@@ -212,6 +215,60 @@ uint64_t Result(char * string)
 		}
 	}
 }
+
+// A utility function to reverse a string
+void reverse(char str[], int length)
+{
+    int start = 0;
+    int end = length - 1;
+    while (start < end) {
+        char temp = str[start];
+        str[start] = str[end];
+        str[end] = temp;
+        end--;
+        start++;
+    }
+}
+// Implementation of citoa()
+char* citoa(int64_t num, char* str, int base)
+{
+    int i = 0;
+    bool isNegative = false;
+
+    /* Handle 0 explicitly, otherwise empty string is
+     * printed for 0 */
+    if (num == 0) {
+        str[i++] = '0';
+        str[i] = '\0';
+        return str;
+    }
+
+    // In standard itoa(), negative numbers are handled
+    // only with base 10. Otherwise numbers are
+    // considered unsigned.
+    if (num < 0 && base == 10) {
+        isNegative = true;
+        num = -num;
+    }
+
+    // Process individual digits
+    while (num != 0) {
+        int rem = num % base;
+        str[i++] = (rem > 9) ? (rem - 10) + 'a' : rem + '0';
+        num = num / base;
+    }
+
+    // If number is negative, append '-'
+    if (isNegative)
+        str[i++] = '-';
+
+    str[i] = '\0'; // Append string terminator
+
+    // Reverse the string
+    reverse(str, i);
+
+    return str;
+}
 /* USER CODE END 0 */
 
 /**
@@ -243,6 +300,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   Lcd_PortType ports[] = { GPIOA, GPIOA, GPIOA, GPIOA };
   Lcd_PinType pins[] = {LCD_D4_Pin, LCD_D5_Pin, LCD_D6_Pin, LCD_D7_Pin};
@@ -250,14 +308,19 @@ int main(void)
   lcd = Lcd_create(ports, pins, GPIOA, LCD_RS_Pin, GPIOA, LCD_E_Pin, LCD_4_BIT_MODE);
 
   Lcd_cursor(&lcd, 0, 0);
-  Lcd_string(&lcd, "BTL ESD NHOM XX");
+  Lcd_string(&lcd, "BTL ESD NHOM 18");
   HAL_Delay(1500);
   Lcd_clear(&lcd);
+
+  HAL_TIM_Base_Start_IT(&htim3);
+  HAL_TIM_Base_Start(&htim3);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   uint8_t cursor_cnt = 0;
+  uint8_t splash_cnt = 0;
   uint8_t cursor_max = 0;
   uint8_t lcd_zero = 0;
   uint8_t current_layout = 0;
@@ -267,6 +330,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
 	  key_current = Keypad_Getkey();
 	  if(key_current != 0 && key_current != key_prev) {
 		  s = keypad_layout[current_layout][key_current-1];
@@ -283,9 +348,9 @@ int main(void)
 			  memset(lcd_buffer,0,strlen(lcd_buffer));
 		  }
 		  else if (s == keypad_layout[0][14]) {
-			  char snum[16];
-			  lcd_buffer[cursor_cnt] = s;
-			  itoa(Result(lcd_buffer), snum, 10);
+			  char snum[19];
+			  lcd_buffer[cursor_max] = s;
+			  citoa(Result(lcd_buffer), snum, 10);
 			  Lcd_cursor(&lcd, 1, 0);
 			  Lcd_string(&lcd, snum);
 		  }
@@ -303,23 +368,35 @@ int main(void)
 			  cursor_cnt ++;
 			  cursor_max = cursor_cnt;
 		  }
-
 		  // print lcd
-		  if (cursor_cnt>16){
-			  lcd_zero = cursor_cnt-16;
+		  if (cursor_cnt>15){
+			  lcd_zero = cursor_cnt-15;
 		  }
 		  else {
 			  lcd_zero = 0;
 		  }
-		  char subbuff[17];
-		  memcpy( subbuff, &lcd_buffer[lcd_zero], 16 );
-		  subbuff[16] = '\0';
+		  char subbuff[16];
+		  memcpy( subbuff, &lcd_buffer[lcd_zero], 15 );
+		  subbuff[15] = '\0';
 		  Lcd_cursor(&lcd, 0, 0);
 		  Lcd_string(&lcd, subbuff);
+
+		  if (cursor_cnt>15){
+			  	  splash_cnt = 15;
+			 }
+		  else splash_cnt = cursor_cnt;
+
+	  }
+	  if (splash){
+		  Lcd_cursor(&lcd, 0, splash_cnt);
+		  Lcd_string(&lcd, " ");
+	  }
+	  else {
+		  Lcd_cursor(&lcd, 0, splash_cnt);
+		  Lcd_string(&lcd, "_");
+
 	  }
 	  key_prev = key_current;
-
-    /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
@@ -340,7 +417,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL2;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL6;
   RCC_OscInitStruct.PLL.PREDIV = RCC_PREDIV_DIV1;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -355,7 +432,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -363,6 +440,51 @@ void SystemClock_Config(void)
   /** Enables the Clock Security System
   */
   HAL_RCC_EnableCSS();
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 6399;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 5000;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+
 }
 
 /**
@@ -415,6 +537,12 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
+{
+	if (htim == &htim3){
+		splash = !splash;
+	}
+}
 
 /* USER CODE END 4 */
 
